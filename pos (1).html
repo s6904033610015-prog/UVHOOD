@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UVIELD Mini POS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700&family=Sarabun:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--navy:#0E2A3B;--sky:#3E9BC7;--sun:#F2A93B;}
+  *{font-family:'Sarabun',sans-serif} h1,h2,.display{font-family:'Kanit',sans-serif}
+  body{background:#F4F6F8;color:#33454F}
+  .tab.on{background:var(--navy);color:#fff}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginView" class="min-h-screen flex items-center justify-center px-5">
+  <form id="loginForm" class="bg-white rounded-2xl shadow p-8 w-full max-w-sm space-y-4">
+    <h1 class="display text-2xl font-bold" style="color:var(--navy)">UVIELD Mini POS</h1>
+    <p class="text-sm text-slate-500">เข้าสู่ระบบสำหรับพนักงาน</p>
+    <input id="email" type="email" required placeholder="อีเมล" class="w-full border rounded-lg px-4 py-2.5 text-sm">
+    <input id="password" type="password" required placeholder="รหัสผ่าน" class="w-full border rounded-lg px-4 py-2.5 text-sm">
+    <p id="loginErr" class="hidden text-sm text-red-600"></p>
+    <button class="w-full py-3 rounded-full text-white font-semibold" style="background:var(--navy)">เข้าสู่ระบบ</button>
+  </form>
+</div>
+
+<!-- APP -->
+<div id="appView" class="hidden max-w-6xl mx-auto px-4 py-6">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="display text-2xl font-bold" style="color:var(--navy)">UVIELD Mini POS</h1>
+    <div class="flex gap-2 text-sm">
+      <button id="refreshBtn" class="px-4 py-2 rounded-full border bg-white">รีเฟรช</button>
+      <button id="csvBtn" class="px-4 py-2 rounded-full border bg-white">ส่งออก CSV</button>
+      <button id="logoutBtn" class="px-4 py-2 rounded-full text-white" style="background:var(--navy)">ออกจากระบบ</button>
+    </div>
+  </div>
+
+  <!-- stats -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    <div class="bg-white rounded-xl p-4"><p class="text-xs text-slate-500">ออเดอร์วันนี้</p><p id="stToday" class="display text-2xl font-bold">0</p></div>
+    <div class="bg-white rounded-xl p-4"><p class="text-xs text-slate-500">ยอดขายวันนี้</p><p id="stRevToday" class="display text-2xl font-bold">฿0</p></div>
+    <div class="bg-white rounded-xl p-4"><p class="text-xs text-slate-500">รอดำเนินการ (ใหม่)</p><p id="stNew" class="display text-2xl font-bold" style="color:var(--sun)">0</p></div>
+    <div class="bg-white rounded-xl p-4"><p class="text-xs text-slate-500">ยอดขายรวม (ไม่รวมยกเลิก)</p><p id="stRevAll" class="display text-2xl font-bold">฿0</p></div>
+  </div>
+
+  <!-- walk-in sale -->
+  <form id="saleForm" class="bg-white rounded-xl p-4 mb-6 flex flex-wrap items-end gap-3">
+    <div class="w-full text-sm font-semibold" style="color:var(--navy)">ขายหน้าร้าน (บันทึกเป็น "ชำระแล้ว")</div>
+    <label class="text-xs">สี<select id="sColor" class="block border rounded-lg px-3 py-2 text-sm"><option>ดำ</option><option>ขาว</option><option>เทา</option><option>ฟ้า</option></select></label>
+    <label class="text-xs">ไซส์<select id="sSize" class="block border rounded-lg px-3 py-2 text-sm"><option>S</option><option selected>M</option><option>L</option><option>XL</option><option>2XL</option></select></label>
+    <label class="text-xs">จำนวน<input id="sQty" type="number" min="1" max="20" value="1" class="block border rounded-lg px-3 py-2 text-sm w-20"></label>
+    <label class="text-xs flex-1 min-w-[140px]">ชื่อลูกค้า (ไม่บังคับ)<input id="sName" class="block border rounded-lg px-3 py-2 text-sm w-full"></label>
+    <div class="text-sm">รวม <b id="sTotal" class="display text-lg">฿490</b></div>
+    <button class="px-5 py-2.5 rounded-full text-white text-sm font-semibold" style="background:var(--sky)">บันทึกการขาย</button>
+  </form>
+
+  <!-- filter -->
+  <div id="tabs" class="flex flex-wrap gap-2 mb-3 text-sm"></div>
+
+  <!-- table -->
+  <div class="bg-white rounded-xl overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="text-left text-xs text-slate-500 border-b"><tr>
+        <th class="p-3">เลขที่</th><th class="p-3">เวลา</th><th class="p-3">ลูกค้า</th><th class="p-3">สินค้า</th><th class="p-3 text-right">ยอด</th><th class="p-3">ช่องทาง</th><th class="p-3">สถานะ</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="empty" class="hidden p-6 text-center text-slate-400">ยังไม่มีออเดอร์</p>
+  </div>
+</div>
+
+<script>
+// ===== ตั้งค่า =====
+const SUPABASE_URL = "https://twxiyhtenjiambuyucho.supabase.co";
+const SUPABASE_KEY = "YOUR_ANON_PUBLIC_KEY";
+// ===================
+// รองรับทั้ง anon key (eyJ...) และ publishable key (sb_publishable_...)
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { global: { fetch: (u, o = {}) => {
+  const h = new Headers(o.headers);
+  if (h.get('Authorization') === 'Bearer ' + SUPABASE_KEY) h.delete('Authorization');
+  return fetch(u, { ...o, headers: h });
+} } });
+const STATUS = { new:'ใหม่', paid:'ชำระแล้ว', shipped:'จัดส่งแล้ว', done:'เสร็จสิ้น', cancelled:'ยกเลิก' };
+const TIER = {1:490, 2:890, 3:1190};
+const price = q => TIER[q] || TIER[3] + (q-3)*Math.round(TIER[3]/3);
+const $ = id => document.getElementById(id);
+const baht = n => '฿' + Number(n).toLocaleString('en-US');
+const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let orders = [], filter = 'all';
+
+async function boot(){
+  const { data:{ session } } = await db.auth.getSession();
+  show(!!session);
+}
+function show(on){
+  $('loginView').classList.toggle('hidden', on);
+  $('appView').classList.toggle('hidden', !on);
+  if(on) load();
+}
+$('loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const { error } = await db.auth.signInWithPassword({ email:$('email').value, password:$('password').value });
+  $('loginErr').classList.toggle('hidden', !error);
+  if(error) $('loginErr').textContent = 'เข้าสู่ระบบไม่สำเร็จ: ' + error.message; else show(true);
+});
+$('logoutBtn').onclick = async () => { await db.auth.signOut(); show(false); };
+$('refreshBtn').onclick = load;
+
+async function load(){
+  const { data, error } = await db.from('orders').select('*').order('created_at', { ascending:false }).limit(500);
+  if(error){ alert('โหลดข้อมูลไม่สำเร็จ: ' + error.message); return; }
+  orders = data; render();
+}
+
+function render(){
+  const today = new Date().toDateString();
+  const live = orders.filter(o => o.status !== 'cancelled');
+  const td = live.filter(o => new Date(o.created_at).toDateString() === today);
+  $('stToday').textContent = td.length;
+  $('stRevToday').textContent = baht(td.reduce((a,o)=>a+Number(o.total),0));
+  $('stNew').textContent = orders.filter(o=>o.status==='new').length;
+  $('stRevAll').textContent = baht(live.reduce((a,o)=>a+Number(o.total),0));
+
+  $('tabs').innerHTML = [['all','ทั้งหมด'], ...Object.entries(STATUS)].map(([k,v]) =>
+    `<button data-f="${k}" class="tab px-4 py-1.5 rounded-full border bg-white ${filter===k?'on':''}">${v}${k==='all'?'':' ('+orders.filter(o=>o.status===k).length+')'}</button>`).join('');
+
+  const list = orders.filter(o => filter==='all' || o.status===filter);
+  $('empty').classList.toggle('hidden', list.length>0);
+  $('rows').innerHTML = list.map(o => `
+    <tr class="border-b last:border-0 align-top">
+      <td class="p-3 font-medium">${esc(o.order_ref)}</td>
+      <td class="p-3 whitespace-nowrap">${new Date(o.created_at).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'})}</td>
+      <td class="p-3"><div>${esc(o.fullname)}</div><div class="text-xs text-slate-500">${esc(o.phone)}</div><div class="text-xs text-slate-400 max-w-[220px]">${esc(o.address)}</div></td>
+      <td class="p-3">${esc(o.color)} / ${esc(o.size)} × ${o.quantity}</td>
+      <td class="p-3 text-right font-semibold">${baht(o.total)}</td>
+      <td class="p-3">${o.source==='pos'?'หน้าร้าน':'เว็บ'}</td>
+      <td class="p-3"><select data-id="${o.id}" class="st border rounded-lg px-2 py-1">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}" ${o.status===k?'selected':''}>${v}</option>`).join('')}</select></td>
+    </tr>`).join('');
+}
+$('tabs').addEventListener('click', e => { const b=e.target.closest('[data-f]'); if(b){ filter=b.dataset.f; render(); }});
+$('rows').addEventListener('change', async e => {
+  const sel = e.target.closest('.st'); if(!sel) return;
+  const { error } = await db.from('orders').update({ status: sel.value }).eq('id', sel.dataset.id);
+  if(error) alert('อัปเดตไม่สำเร็จ: ' + error.message);
+  load();
+});
+
+// ขายหน้าร้าน
+const calc = () => $('sTotal').textContent = baht(price(Math.max(1, +$('sQty').value || 1)));
+$('sQty').addEventListener('input', calc);
+$('saleForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const q = Math.min(20, Math.max(1, +$('sQty').value || 1));
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  const { error } = await db.from('orders').insert({
+    order_ref: 'POS' + String(d.getFullYear()).slice(2)+p(d.getMonth()+1)+p(d.getDate())+'-'+Math.random().toString(36).slice(2,6).toUpperCase(),
+    color:$('sColor').value, size:$('sSize').value, quantity:q, total:price(q),
+    fullname: $('sName').value.trim() || 'ลูกค้าหน้าร้าน', phone:'-', address:'-',
+    status:'paid', source:'pos'
+  });
+  if(error){ alert('บันทึกไม่สำเร็จ: ' + error.message); return; }
+  $('sName').value=''; $('sQty').value=1; calc(); load();
+});
+
+// CSV
+$('csvBtn').onclick = () => {
+  const head = ['order_ref','created_at','fullname','phone','address','color','size','quantity','total','status','source'];
+  const q = v => '"' + String(v ?? '').replace(/"/g,'""') + '"';
+  const csv = '\ufeff' + [head.join(','), ...orders.map(o => head.map(h => q(o[h])).join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+  a.download = 'orders.csv'; a.click();
+};
+
+setInterval(() => { if(!$('appView').classList.contains('hidden')) load(); }, 30000);
+boot();
+</script>
+</body>
+</html>
